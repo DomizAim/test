@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <title>Angriffsplaner für Die Stämme - Welt 240</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; background: #f0f0f0; }
+    h1 { color: #333; }
+    label, input, select, textarea, button { display: block; margin-top: 10px; padding: 5px; }
+    input, select, textarea { width: 100%; max-width: 300px; }
+    .output, .attack-entry { margin-top: 15px; font-weight: bold; }
+    .warning { color: red; }
+    .attack-list { margin-top: 20px; background: #fff; padding: 10px; border-radius: 5px; }
+    .attack-entry { background: #e8e8e8; margin-bottom: 5px; padding: 5px; border-radius: 4px; }
+    textarea { height: 100px; }
+    @media (max-width: 600px) {
+      body { margin: 10px; font-size: 14px; }
+      input, select, textarea { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <h1>Angriffsplaner für Welt 240</h1>
+
+  <label>Eigenes Dorf (z.B. 500|500): <input type="text" id="startCoords"></label>
+  <label>Ziel-Dorf (z.B. 505|505): <input type="text" id="targetCoords"></label>
+  <label>Einheitentyp:
+    <select id="unitType">
+      <option value="speer">Speerträger</option>
+      <option value="schwert">Schwertkämpfer</option>
+      <option value="axt">Axtkämpfer</option>
+      <option value="späher">Späher</option>
+      <option value="lkav">Leichte Kavallerie</option>
+      <option value="skav">Schwere Kavallerie</option>
+      <option value="ramme">Rammbock</option>
+      <option value="kata">Katapult</option>
+      <option value="ag">Adelsgeschlecht (AG)</option>
+    </select>
+  </label>
+  <label>Truppenanzahl: <input type="number" id="troops" value="1"></label>
+  <label>Dorfpunkte: <input type="number" id="villagePoints" value="1000"></label>
+  <label>Ankunftszeit (JJJJ-MM-TT HH:MM:SS): <input type="text" id="arrivalTime"></label>
+
+  <button onclick="addAttack()">Angriff speichern</button>
+
+  <div class="attack-list" id="attackList"></div>
+
+  <label>Exportierte Angriffe:</label>
+  <textarea id="exportData"></textarea>
+  <button onclick="exportAttacks()">Exportieren</button>
+  <button onclick="importAttacks()">Importieren</button>
+  <button onclick="downloadCSV()">CSV herunterladen</button>
+
+  <script>
+    const attacks = [];
+    const unitSpeeds = {
+      speer: 18,
+      schwert: 22,
+      axt: 18,
+      späher: 9,
+      lkav: 10,
+      skav: 11,
+      ramme: 30,
+      kata: 30,
+      ag: 35
+    };
+
+    function parseCoords(coords) {
+      const match = coords.match(/(\d{3})\|(\d{3})/);
+      return match ? { x: parseInt(match[1]), y: parseInt(match[2]) } : null;
+    }
+
+    function calculateDistance(start, target) {
+      const dx = start.x - target.x;
+      const dy = start.y - target.y;
+      return Math.sqrt(dx * dx + dy * dy);
+    }
+
+    function getLaunchTime(arrivalStr, distance, unitKey) {
+      const arrivalDate = new Date(arrivalStr.replace(" ", "T"));
+      if (isNaN(arrivalDate.getTime())) return null;
+      const unitSpeed = unitSpeeds[unitKey];
+      const travelTimeMs = distance * unitSpeed * 3600 * 1000;
+      return new Date(arrivalDate.getTime() - travelTimeMs);
+    }
+
+    function addAttack() {
+      const startCoords = parseCoords(document.getElementById("startCoords").value);
+      const targetCoords = parseCoords(document.getElementById("targetCoords").value);
+      const unitKey = document.getElementById("unitType").value;
+      const arrivalStr = document.getElementById("arrivalTime").value;
+      const troops = parseInt(document.getElementById("troops").value);
+      const villagePoints = parseInt(document.getElementById("villagePoints").value);
+
+      if (!startCoords || !targetCoords || !unitSpeeds[unitKey] || isNaN(troops)) {
+        alert("Bitte alle Felder korrekt ausfüllen.");
+        return;
+      }
+
+      const distance = calculateDistance(startCoords, targetCoords);
+      const sendTime = getLaunchTime(arrivalStr, distance, unitKey);
+      if (!sendTime) {
+        alert("Ungültiges Datumsformat.");
+        return;
+      }
+
+      const sendTimeStr = sendTime.toLocaleString("de-DE", { hour12: false });
+      const arrivalHour = new Date(arrivalStr.replace(" ", "T")).getHours();
+      const nightBonus = arrivalHour >= 22 || arrivalHour < 7;
+      const isFake = troops < (villagePoints * 0.01);
+
+      const unitName = document.getElementById("unitType").options[document.getElementById("unitType").selectedIndex].text;
+
+      const attack = {
+        start: document.getElementById("startCoords").value,
+        target: document.getElementById("targetCoords").value,
+        unit: unitName,
+        troops,
+        distance: distance.toFixed(2),
+        sendTime: sendTimeStr,
+        arrivalTime: arrivalStr,
+        nightBonus,
+        isFake
+      };
+
+      attacks.push(attack);
+      renderAttacks();
+    }
+
+    function renderAttacks() {
+      const list = document.getElementById("attackList");
+      list.innerHTML = "<h3>Geplante Angriffe:</h3>";
+      attacks.forEach((atk, i) => {
+        list.innerHTML += `<div class='attack-entry'>
+          <strong>${i+1}.</strong> ${atk.start} → ${atk.target} mit ${atk.unit} (${atk.troops} Truppen)<br>
+          Entfernung: ${atk.distance} Felder<br>
+          Losschickzeit: ${atk.sendTime}<br>
+          Ankunftszeit: ${atk.arrivalTime}<br>
+          ${atk.nightBonus ? "<span class='warning'>Nachtbonus aktiv</span><br>" : ""}
+          ${atk.isFake ? "<span class='warning'>Fake-Angriff (unter 1%)</span>" : ""}
+        </div>`;
+      });
+    }
+
+    function exportAttacks() {
+      document.getElementById("exportData").value = JSON.stringify(attacks, null, 2);
+    }
+
+    function importAttacks() {
+      try {
+        const imported = JSON.parse(document.getElementById("exportData").value);
+        if (Array.isArray(imported)) {
+          imported.forEach(a => attacks.push(a));
+          renderAttacks();
+        }
+      } catch (e) {
+        alert("Import fehlgeschlagen. Bitte überprüfe das Format.");
+      }
+    }
+
+    function downloadCSV() {
+      let csv = "Nr;Start;Ziel;Einheit;Truppen;Entfernung;Losschickzeit;Ankunftszeit;Nachtbonus;Fake\n";
+      attacks.forEach((atk, i) => {
+        csv += `${i+1};${atk.start};${atk.target};${atk.unit};${atk.troops};${atk.distance};${atk.sendTime};${atk.arrivalTime};${atk.nightBonus ? "Ja" : "Nein"};${atk.isFake ? "Ja" : "Nein"}\n`;
+      });
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement("a");
+      link.setAttribute("href", URL.createObjectURL(blob));
+      link.setAttribute("download", "angriffsplan.csv");
+      link.style.display = "none";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+  </script>
+</body>
+</html>
