@@ -1,0 +1,262 @@
+
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <title>Angriffsplaner – Die Stämme Welt 240</title>
+  <style>
+    body {
+      background-color: #121212;
+      color: #e0e0e0;
+      font-family: Arial, sans-serif;
+      padding: 20px;
+    }
+    h1 {
+      text-align: center;
+      color: #ff9800;
+    }
+    label {
+      display: block;
+      margin-top: 10px;
+    }
+    input, select, textarea, button {
+      width: 100%;
+      max-width: 300px;
+      padding: 6px;
+      margin-top: 4px;
+      border-radius: 5px;
+      border: 1px solid #333;
+      background: #1e1e1e;
+      color: #fff;
+    }
+    .form-group {
+      margin-bottom: 15px;
+    }
+    .form-row {
+      display: flex;
+      gap: 10px;
+    }
+    .form-row > div {
+      flex: 1;
+    }
+    .section {
+      margin-top: 30px;
+      border: 1px solid #333;
+      padding: 15px;
+      border-radius: 8px;
+      background: #1a1a1a;
+    }
+  </style>
+</head>
+<body>
+  <h1>🛡️ Angriffsplaner – Welt 240 (Darkmode)</h1>
+
+  <div class="section">
+    <div class="form-group">
+      <label for="attackTitle">Angriffstitel:</label>
+      <input type="text" id="attackTitle" placeholder="z.B. AG 1 auf 505|505">
+    </div>
+
+    <div class="form-row">
+      <div>
+        <label for="startX">Start X:</label>
+        <input type="number" id="startX" placeholder="z.B. 500">
+      </div>
+      <div>
+        <label for="startY">Start Y:</label>
+        <input type="number" id="startY" placeholder="z.B. 500">
+      </div>
+    </div>
+
+    <div class="form-row">
+      <div>
+        <label for="targetX">Ziel X:</label>
+        <input type="number" id="targetX" placeholder="z.B. 505">
+      </div>
+      <div>
+        <label for="targetY">Ziel Y:</label>
+        <input type="number" id="targetY" placeholder="z.B. 505">
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label for="arrival">Ankunftszeit:</label>
+      <input type="datetime-local" id="arrival">
+    </div>
+
+    <div class="form-group">
+      <label for="unitSpeed">Einheitentyp (für Geschwindigkeit):</label>
+      <select id="unitSpeed">
+        <option value="speer">Speerträger</option>
+        <option value="schwert">Schwertkämpfer</option>
+        <option value="axt">Axtkämpfer</option>
+        <option value="späher">Späher</option>
+        <option value="lkav">Leichte Kavallerie</option>
+        <option value="skav">Schwere Kavallerie</option>
+        <option value="ramme">Rammbock</option>
+        <option value="kata">Katapult</option>
+        <option value="ag">Adelsgeschlecht (AG)</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label for="note">Notiz:</label>
+      <textarea id="note" placeholder="z.B. Vor AG-Angriff 3 Ramme rein"></textarea>
+    </div>
+
+    <button onclick="saveAttack()">Speichern</button>
+  </div>
+
+  <script>
+    // Dörfer automatisch setzen über Tampermonkey-PostMessage
+    window.addEventListener("message", function(e) {
+      if (e.data && e.data.type === "target") {
+        const [x, y] = e.data.coords.split('|');
+        document.getElementById("targetX").value = x;
+        document.getElementById("targetY").value = y;
+      } else if (e.data && e.data.type === "start") {
+        const [x, y] = e.data.coords.split('|');
+        document.getElementById("startX").value = x;
+        document.getElementById("startY").value = y;
+      }
+    });
+
+    function saveAttack() {
+      const title = document.getElementById("attackTitle").value;
+      const startX = document.getElementById("startX").value;
+      const startY = document.getElementById("startY").value;
+      const targetX = document.getElementById("targetX").value;
+      const targetY = document.getElementById("targetY").value;
+      const arrival = document.getElementById("arrival").value;
+      const unit = document.getElementById("unitSpeed").value;
+      const note = document.getElementById("note").value;
+
+      alert(`✅ Angriff gespeichert:\n${title}\n${startX}|${startY} → ${targetX}|${targetY}\nEinheit: ${unit}\nAnkunft: ${arrival}\nNotiz: ${note}`);
+    }
+  
+    const attacks = [];
+
+    function calculateDistance(x1, y1, x2, y2) {
+      const dx = x1 - x2;
+      const dy = y1 - y2;
+      return Math.sqrt(dx * dx + dy * dy);
+    }
+
+    const unitSpeeds = {
+      speer: 18,
+      schwert: 22,
+      axt: 18,
+      späher: 9,
+      lkav: 10,
+      skav: 11,
+      ramme: 30,
+      kata: 30,
+      ag: 35
+    };
+
+    function saveAttack() {
+      const title = document.getElementById("attackTitle").value;
+      const startX = parseInt(document.getElementById("startX").value);
+      const startY = parseInt(document.getElementById("startY").value);
+      const targetX = parseInt(document.getElementById("targetX").value);
+      const targetY = parseInt(document.getElementById("targetY").value);
+      const arrival = document.getElementById("arrival").value;
+      const unit = document.getElementById("unitSpeed").value;
+      const note = document.getElementById("note").value;
+
+      if (!title || isNaN(startX) || isNaN(startY) || isNaN(targetX) || isNaN(targetY) || !arrival || !unit) {
+        alert("Bitte alle Felder korrekt ausfüllen.");
+        return;
+      }
+
+      const dist = calculateDistance(startX, startY, targetX, targetY);
+      const speed = unitSpeeds[unit];
+      const arrivalDate = new Date(arrival);
+      const travelTimeMs = dist * speed * 3600 * 1000;
+      const sendTime = new Date(arrivalDate.getTime() - travelTimeMs);
+
+      const arrivalHour = arrivalDate.getHours();
+      const nightBonus = arrivalHour >= 22 || arrivalHour < 7;
+
+      const attack = {
+        title,
+        start: `${startX}|${startY}`,
+        target: `${targetX}|${targetY}`,
+        unit,
+        speed,
+        dist: dist.toFixed(2),
+        arrival: arrivalDate.toLocaleString('de-DE'),
+        send: sendTime.toLocaleString('de-DE'),
+        nightBonus,
+        note
+      };
+
+      attacks.push(attack);
+      renderAttacks();
+    }
+
+    function renderAttacks() {
+      const container = document.getElementById("attackList");
+      container.innerHTML = "<h3>🗂️ Geplante Angriffe</h3>";
+      attacks.forEach((atk, i) => {
+        container.innerHTML += `
+          <div style='border:1px solid #333; margin:10px 0; padding:10px; border-radius:6px; background:#222;'>
+            <b>${i + 1}. ${atk.title}</b><br>
+            ${atk.start} → ${atk.target}<br>
+            Einheit: ${atk.unit} – Entfernung: ${atk.dist} Felder<br>
+            Ankunft: ${atk.arrival}<br>
+            Losschickzeit: ${atk.send}<br>
+            ${atk.nightBonus ? "<span style='color:red;'>🌙 Nachtbonus aktiv</span><br>" : ""}
+            Notiz: ${atk.note}
+          </div>`;
+      });
+    }
+
+    function exportJSON() {
+      const data = JSON.stringify(attacks, null, 2);
+      const blob = new Blob([data], {type: 'application/json'});
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = 'angriffe.json';
+      link.click();
+    }
+
+    function importJSON(evt) {
+      const file = evt.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const data = JSON.parse(e.target.result);
+          if (Array.isArray(data)) {
+            data.forEach(a => attacks.push(a));
+            renderAttacks();
+          }
+        } catch {
+          alert("Fehler beim Import.");
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    window.addEventListener("message", function(e) {
+      if (e.data && e.data.type === "target") {
+        const [x, y] = e.data.coords.split('|');
+        document.getElementById("targetX").value = x;
+        document.getElementById("targetY").value = y;
+      } else if (e.data && e.data.type === "start") {
+        const [x, y] = e.data.coords.split('|');
+        document.getElementById("startX").value = x;
+        document.getElementById("startY").value = y;
+      }
+    });
+    </script>
+    <div class="section" id="attackList"></div>
+    <div class="section">
+      <h3>📤 Angriffe exportieren/importieren</h3>
+      <button onclick="exportJSON()">Exportieren (.json)</button>
+      <input type="file" onchange="importJSON(event)" />
+    </div>
+    
+</body>
+</html>
